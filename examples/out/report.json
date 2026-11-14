@@ -1,0 +1,106 @@
+{
+  "coverage": {
+    "active": 3,
+    "childrenIDs": 3,
+    "id": 3,
+    "interval": 3,
+    "name": 3,
+    "parent": 3,
+    "path": 3,
+    "pathName": 3,
+    "tags": 3,
+    "type": 3,
+    "weight": 3
+  },
+  "evidence": {
+    "api_schema": "server/routers/api-router.js#L185-L197",
+    "model_tojson": "server/model/monitor.js#L133-L220"
+  },
+  "findings": [
+    {
+      "code": "E_NOT_PORTABLE",
+      "field": null,
+      "index": 0,
+      "message": "cannot rebuild monitor 'blog' (http) from the API payload: missing 4 behaviour-bearing field(s): accepted_statuscodes, maxredirects, method, url",
+      "severity": "error"
+    },
+    {
+      "code": "E_NOT_PORTABLE",
+      "field": null,
+      "index": 1,
+      "message": "cannot rebuild monitor 'landing-keyword' (keyword) from the API payload: missing 3 behaviour-bearing field(s): keyword, method, url",
+      "severity": "error"
+    },
+    {
+      "code": "E_NOT_PORTABLE",
+      "field": null,
+      "index": 2,
+      "message": "cannot rebuild monitor 'db-port' (port) from the API payload: missing 2 behaviour-bearing field(s): hostname, port",
+      "severity": "error"
+    }
+  ],
+  "monitors": [
+    {
+      "index": 0,
+      "missing": [
+        "accepted_statuscodes",
+        "maxredirects",
+        "method",
+        "url"
+      ],
+      "name": "blog",
+      "recreatable": false,
+      "type": "http",
+      "witness": [
+        "accepted_statuscodes",
+        "maxredirects",
+        "method",
+        "url"
+      ]
+    },
+    {
+      "index": 1,
+      "missing": [
+        "keyword",
+        "method",
+        "url"
+      ],
+      "name": "landing-keyword",
+      "recreatable": false,
+      "type": "keyword",
+      "witness": [
+        "keyword",
+        "method",
+        "url"
+      ]
+    },
+    {
+      "index": 2,
+      "missing": [
+        "hostname",
+        "port"
+      ],
+      "name": "db-port",
+      "recreatable": false,
+      "type": "port",
+      "witness": [
+        "hostname",
+        "port"
+      ]
+    }
+  ],
+  "summary": {
+    "api_fields": 11,
+    "api_fields_present_in_all_monitors": 11,
+    "errors": 3,
+    "findings": 3,
+    "model_fields": 77,
+    "monitors": 3,
+    "not_recreatable": 3,
+    "recreatable": 0,
+    "required_fields_checked": 11
+  },
+  "tool": "uptime-kuma-monitor-portability",
+  "upstream": "https://github.com/louislam/uptime-kuma",
+  "version": "1.0.0"
+}

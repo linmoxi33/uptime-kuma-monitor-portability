@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "monitors": [
+    {"id": 1, "name": "blog", "type": "http", "active": true, "parent": null,
+     "childrenIDs": [], "tags": [], "path": ["blog"], "pathName": "blog",
+     "interval": 60, "weight": null},
+    {"id": 2, "name": "landing-keyword", "type": "keyword", "active": true, "parent": 1,
+     "childrenIDs": [3], "tags": [{"tag_id": 7, "monitor_id": 2, "value": "prod", "name": "env", "color": "#fff"}],
+     "path": ["blog", "landing-keyword"], "pathName": "blog / landing-keyword",
+     "interval": 120, "weight": 2000},
+    {"id": 3, "name": "db-port", "type": "port", "active": false, "parent": null,
+     "childrenIDs": [], "tags": [], "path": ["db-port"], "pathName": "db-port",
+     "interval": 30, "weight": null}
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "_comment": "Fill the null values, then create the monitors out of band; GET /api/monitors does not carry them.",
+  "monitors": [
+    {
+      "fill_required": {
+        "accepted_statuscodes": null,
+        "maxredirects": null,
+        "method": null,
+        "url": null
+      },
+      "name": "blog",
+      "present_from_api": {
+        "active": true,
+        "childrenIDs": [],
+        "id": 1,
+        "interval": 60,
+        "name": "blog",
+        "parent": null,
+        "path": [
+          "blog"
+        ],
+        "pathName": "blog",
+        "tags": [],
+        "type": "http",
+        "weight": null
+      },
+      "type": "http"
+    },
+    {
+      "fill_required": {
+        "keyword": null,
+        "method": null,
+        "url": null
+      },
+      "name": "landing-keyword",
+      "present_from_api": {
+        "active": true,
+        "childrenIDs": [
+          3
+        ],
+        "id": 2,
+        "interval": 120,
+        "name": "landing-keyword",
+        "parent": 1,
+        "path": [
+          "blog",
+          "landing-keyword"
+        ],
+        "pathName": "blog / landing-keyword",
+        "tags": [
+          {
+            "color": "#fff",
+            "monitor_id": 2,
+            "name": "env",
+            "tag_id": 7,
+            "value": "prod"
+          }
+        ],
+        "type": "keyword",
+        "weight": 2000
+      },
+      "type": "keyword"
+    },
+    {
+      "fill_required": {
+        "hostname": null,
+        "port": null
+      },
+      "name": "db-port",
+      "present_from_api": {
+        "active": false,
+        "childrenIDs": [],
+        "id": 3,
+        "interval": 30,
+        "name": "db-port",
+        "parent": null,
+        "path": [
+          "db-port"
+        ],
+        "pathName": "db-port",
+        "tags": [],
+        "type": "port",
+        "weight": null
+      },
+      "type": "port"
+    }
+  ]
+}

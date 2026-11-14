@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""uptime-kuma-monitor-portability: can a GET /api/monitors payload rebuild your monitors?
+
+Field catalog is derived from the upstream source:
+  - server/routers/api-router.js  monitorSchema (11 fields, the documented API shape)
+  - server/model/monitor.js       toJSON() (86 fields, the record the server actually keeps)
+No network. No third-party packages.
+"""
+import argparse
+import json
+import sys
+
+VERSION = "1.0.0"
+UPSTREAM = "https://github.com/louislam/uptime-kuma"
+EVIDENCE_SCHEMA = "server/routers/api-router.js#L185-L197"
+EVIDENCE_MODEL = "server/model/monitor.js#L133-L220"
+
+# The 11 fields the OpenAPI `Monitor` schema of GET /api/monitors declares.
+API_FIELDS = {
+    "id": "number", "name": "string", "type": "string", "active": "boolean",
+    "parent": "number|null", "childrenIDs": "number[]", "tags": "object[]",
+    "path": "string[]", "pathName": "string", "interval": "number",
+    "weight": "number|null",
+}
+
+# Fields carried by Monitor.toJSON() but absent from the API schema.
+MODEL_ONLY_FIELDS = 86 - 9  # 86 keys in toJSON(); 9 of the 11 API fields come from the record
+
+COMMON_REQUIRED = ["name", "type", "interval", "active"]
+# Behaviour-bearing fields a monitor cannot be recreated without, per monitor type.
+TYPE_FIELDS = {
+    "http": ["url", "method", "accepted_statuscodes", "maxredirects"],
+    "keyword": ["url", "keyword", "method"],
+    "json-query": ["url", "jsonPath", "jsonPathOperator", "expectedValue"],
+    "port": ["hostname", "port"],
+    "ping": ["hostname"],
+    "dns": ["hostname", "dns_resolve_type"],
+    "docker": ["docker_container", "docker_host"],
+    "mqtt": ["hostname", "port", "mqttTopic"],
+    "grpc": ["grpcUrl", "grpcMethod", "grpcServiceName"],
+    "steam": ["hostname", "port", "game"],
+    "real-browser": ["url"],
+    "push": [],
+    "group": [],
+}
+
+_TYPES = {
+    "number": (int, float), "string": (str,), "boolean": (bool,),
+}
+
+
+def _type_ok(value, spec):
+    if spec == "number|null":
+        return value is None or isinstance(value, (int, float)) and not isinstance(value, bool)
+    if spec == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if spec.endswith("[]"):
+        base = {"number[]": "number", "string[]": "string", "object[]": "object"}[spec]
+        return isinstance(value, list) and all(_type_ok(v, base) for v in value)
+    if spec == "object":
+        return isinstance(value, dict)
+    return isinstance(value, _TYPES[spec])
+
+
+def validate_snapshot(doc):
+    """Return (monitors, findings). Raises ValueError for structurally unusable input."""
+    if not isinstance(doc, dict):
+        raise ValueError("top-level JSON must be an object")
+    if "monitors" not in doc:
+        raise ValueError("missing 'monitors' key")
+    monitors = doc["monitors"]
+    if not isinstance(monitors, list):
+        raise ValueError("'monitors' must be an array")
+    findings = []
+    for i, m in enumerate(monitors):
+        if not isinstance(m, dict):
+            findings.append(_f("E_SCHEMA", "error", i, None, "monitor is not an object"))
+            continue
+        for field, spec in API_FIELDS.items():
+            if field in m and not _type_ok(m[field], spec):
+                findings.append(_f("E_SCHEMA", "error", i, field,
+                                   "field %r must be %s, got %s" % (field, spec, type(m[field]).__name__)))
+    return monitors, findings
+
+
+def _f(code, severity, index, field, message):
+    return {"code": code, "severity": severity, "index": index, "field": field, "message": message}
+
+
+def audit(doc):
+    monitors, findings = validate_snapshot(doc)
+    coverage = {f: 0 for f in API_FIELDS}
+    required_all = set(COMMON_REQUIRED)
+    per_monitor = []
+    for i, m in enumerate(monitors):
+        if not isinstance(m, dict):
+            per_monitor.append({"index": i, "recreatable": False, "missing": [], "witness": []})
+            continue
+        for field in API_FIELDS:
+            if field in m:
+                coverage[field] += 1
+        mtype = m.get("type")
+        type_fields = TYPE_FIELDS.get(mtype)
+        if type_fields is None:
+            findings.append(_f("W_UNKNOWN_TYPE", "warning", i, "type",
+                               "unknown monitor type %r; only common fields are checked" % (mtype,)))
+            type_fields = []
+        required = sorted(set(COMMON_REQUIRED) | set(type_fields))
+        required_all.update(required)
+        missing = [f for f in required if f not in m]
+        # 1-minimal witness: every single missing field alone already blocks a rebuild.
+        witness = sorted(missing)
+        per_monitor.append({
+            "index": i, "name": m.get("name"), "type": mtype,
+            "recreatable": not missing, "missing": missing, "witness": witness,
+        })
+        if missing:
+            findings.append(_f("E_NOT_PORTABLE", "error", i, None,
+                               "cannot rebuild monitor %r (%s) from the API payload: missing %d behaviour-bearing field(s): %s"
+                               % (m.get("name"), mtype, len(missing), ", ".join(missing))))
+    payload_fields = sum(1 for v in coverage.values() if v == len(monitors) and monitors)
+    report = {
+        "tool": "uptime-kuma-monitor-portability",
+        "version": VERSION,
+        "upstream": UPSTREAM,
+        "evidence": {"api_schema": EVIDENCE_SCHEMA, "model_tojson": EVIDENCE_MODEL},
+        "summary": {
+            "monitors": len(monitors),
+            "recreatable": sum(1 for p in per_monitor if p["recreatable"]),
+            "not_recreatable": sum(1 for p in per_monitor if not p["recreatable"]),
+            "api_fields": len(API_FIELDS),
+            "model_fields": MODEL_ONLY_FIELDS,
+            "api_fields_present_in_all_monitors": payload_fields,
+            "required_fields_checked": len(required_all),
+            "findings": len(findings),
+            "errors": sum(1 for f in findings if f["severity"] == "error"),
+        },
+        "coverage": coverage,
+        "monitors": per_monitor,
+        "findings": findings,
+    }
+    return report
+
+
+def template(report, doc):
+    monitors = doc.get("monitors", [])
+    out = {"_comment": "Fill the null values, then create the monitors out of band; "
+                       "GET /api/monitors does not carry them.",
+           "monitors": []}
+    for p in report["monitors"]:
+        m = monitors[p["index"]] if p["index"] < len(monitors) else {}
+        out["monitors"].append({
+            "name": p.get("name"), "type": p.get("type"),
+            "present_from_api": {k: m.get(k) for k in API_FIELDS if k in m},
+            "fill_required": {f: None for f in p["missing"]},
+        })
+    return out
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="uptime-kuma-monitor-portability")
+    ap.add_argument("command", choices=["audit"])
+    ap.add_argument("--input", required=True, help="JSON body of GET /api/monitors saved to a file")
+    ap.add_argument("--json", action="store_true", help="machine-readable report on stdout")
+    ap.add_argument("--emit-template", metavar="PATH", help="write a fill-in JSON template")
+    args = ap.parse_args(argv)
+    try:
+        with open(args.input, "r", encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except OSError as exc:
+        print("error: cannot read %s: %s" % (args.input, exc), file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as exc:
+        print("error: %s is not valid JSON: %s" % (args.input, exc), file=sys.stderr)
+        return 2
+    try:
+        report = audit(doc)
+    except ValueError as exc:
+        print("error: %s" % exc, file=sys.stderr)
+        return 2
+    if args.emit_template:
+        with open(args.emit_template, "w", encoding="utf-8") as fh:
+            json.dump(template(report, doc), fh, indent=2, sort_keys=True)
+            fh.write("\n")
+    if args.json:
+        json.dump(report, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+    else:
+        s = report["summary"]
+        print("monitors=%d recreatable=%d not_recreatable=%d errors=%d"
+              % (s["monitors"], s["recreatable"], s["not_recreatable"], s["errors"]))
+        for f in report["findings"]:
+            print("%-7s %-16s %s" % (f["severity"], f["code"], f["message"]))
+    return 1 if report["summary"]["errors"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

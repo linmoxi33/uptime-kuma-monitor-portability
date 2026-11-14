@@ -1,0 +1,7 @@
+{
+  "monitors": [
+    {"id": "1", "name": "typed-wrong", "type": "ping", "active": "yes",
+     "parent": null, "childrenIDs": [1, "two"], "tags": [], "path": [], "pathName": "",
+     "interval": 60, "weight": null}
+  ]
+}
