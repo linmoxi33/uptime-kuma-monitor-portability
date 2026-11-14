@@ -98,3 +98,7 @@ B 级：首次把 Uptime Kuma 只读 API 的「可移植性」量化成一个可
 ## License
 
 MIT.
+
+## 与同类项目的差异
+
+`gh search repos "uptime kuma monitor"` 的命中里最接近的是 [BigBoot/AutoKuma](https://github.com/BigBoot/AutoKuma)（930★）与 `andrewbergman/kuma-importer`：它们都通过 Uptime Kuma 的 **WebSocket/UI 接口真的创建监控器**，前提是你已经知道每个监控器的完整配置。本项目不做创建，也不假装能创建——它回答的是相反方向的问题：**只读 API 导出的载荷够不够重建监控器**，并给出 11 vs 86 的字段级缺口与 per-monitor 见证。两者互补：先用本工具确认缺口，再用 AutoKuma 一类工具补写。
